@@ -1,0 +1,6 @@
+log/*
+geckodriver.log
+__pycache__/*
+*/__pycache__/*
+.env
+my-project-*.json
