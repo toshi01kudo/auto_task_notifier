@@ -86,7 +86,7 @@ def make_choseisan(event: dict) -> str:
     elif event_type == EventIdStrEnum.TRPG:
         with open("template_choseisan_trpg_comment.txt", "r", encoding="utf-8") as f:
             comment = f.read()
-        return choseisan.create_event(title=choseisan_title, candidate_days=["Dummy"], comment=comment)
+        return choseisan.create_event(title=choseisan_title, candidate_days=["Comming soon..."], comment=comment)
     choseisan.browser.close_selenium()
 
 
