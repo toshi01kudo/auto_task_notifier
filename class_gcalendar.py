@@ -10,7 +10,7 @@ class CalendarApi:
 
         SCOPES = ["https://www.googleapis.com/auth/calendar"]
         gapi_creds = load_credentials_from_file(os.getenv("KEYJSONFILE"), SCOPES)[0]
-        self.service = build("calendar", "v3", credentials=gapi_creds)
+        self.service = build("calendar", "v3", credentials=gapi_creds, cache_discovery=False)
 
     def insert(self, body):
         result = self.service.events().insert(calendarId=self.calendarId, body=body).execute()
