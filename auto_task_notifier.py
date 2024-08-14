@@ -16,10 +16,17 @@ from common_tools import detect_event_type, send_line_notify
 # Parameters ------------------
 JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
 # localeモジュールで曜日を日本語表示にする
-if os.name == "nt":  # Windows
-    locale.setlocale(locale.LC_TIME, ".932")
-else:
-    locale.setlocale(locale.LC_TIME, "ja_JP.UTF-8")
+try:
+    if os.name == "nt":  # Windows
+        locale.setlocale(locale.LC_TIME, ".932")
+    else:
+        locale.setlocale(locale.LC_TIME, "ja_JP.UTF-8")
+except ImportError as e:
+    logging.error(f"Error: {e}")
+    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
+except locale.Error as e:
+    logging.error(f"Error: {e}")
+    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
 
 
 # Main ---

@@ -1,9 +1,9 @@
-name: lint
+name: lint-docstrings
 
 on: push
 
 jobs:
-  lint-and-format-python-code:
+  linter-docs-for-python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.CONFIG_GH_TOKEN }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -22,12 +24,18 @@ jobs:
       - name: Format by black
         run: |
           black .
+      - name: Generate python documents by pdoc3
+        run: |
+          sed -i s,ssh://git@github.com:toshi01kudo/selenium_helper.git,https://github.com/toshi01kudo/selenium_helper.git,g requirements.txt
+          pip install -r requirements.txt
+          rm -rf docs/docstring
+          pdoc --force -o docs/docstring *.py
       - name: Commit files
         continue-on-error: true
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git commit -m "format by black" .
+          git commit -m "format by black & export docstrings" .
           git push
       - name: Check by flake8
         run: |
