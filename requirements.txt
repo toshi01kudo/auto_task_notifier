@@ -2,4 +2,6 @@ google-api-python-client
 google-auth-oauthlib
 requests
 python-dotenv
-git+ssh://git@github.com:toshi01kudo/selenium_helper.git
+pdoc3
+git+https://github.com/toshi01kudo/selenium_helper.git
+selenium
