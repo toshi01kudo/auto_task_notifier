@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import datetime
 import os
 import re
+import locale
 from class_gcalendar import CalendarApi, EventNotFoundException
 from make_choseisan import make_choseisan
 from common_tools import detect_event_type, send_line_notify
@@ -14,6 +15,11 @@ from common_tools import detect_event_type, send_line_notify
 
 # Parameters ------------------
 JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
+# localeモジュールで曜日を日本語表示にする
+if os.name == "nt":  # Windows
+    locale.setlocale(locale.LC_TIME, ".932")
+else:
+    locale.setlocale(locale.LC_TIME, "ja_JP.UTF-8")
 
 
 # Main ---
@@ -181,6 +187,15 @@ def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
 
     # LINE 通知
     send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+
+    # 今後の予定の案内
+    post_event_list = get_post_event_list(events)
+    line_text = "今後の予定一覧です。\n"
+    for event in post_event_list:
+        line_text += f"{event['date']}({event['date'].strftime('%a')}): {event['title']}\n"
+
+    # LINE 通知
+    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
     return None
 
 
@@ -221,6 +236,27 @@ def detect_remove_a_tag(description: str) -> str:
         return regex.group(1)
     else:
         return description
+
+
+def get_post_event_list(events: list) -> list:
+    """
+    数か月先のイベント一覧を取得するメソッド
+    Args:
+        events (list): Googleカレンダーから取得した直近の予定一覧
+    Returns:
+        post_events (list): 予定の日付一覧
+    """
+    upper_limit_date = (datetime.date.today() + datetime.timedelta(days=93)).replace(day=1)
+    post_events = []
+    for event in events:
+        post_event = {
+            "date": datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group()),
+            "title": event["summary"],
+        }
+        if post_event["date"] > upper_limit_date:
+            break
+        post_events.append(post_event)
+    return post_events
 
 
 def send_error_to_line(line_notify_token: str) -> None:
