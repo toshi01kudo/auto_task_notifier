@@ -202,6 +202,7 @@ def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
         line_text += f"{event['date']}({event['date'].strftime('%a')}): {event['title']}\n"
 
     # LINE 通知
+    # send_line_notify(line_text, os.getenv("LINE_USER_TOKEN_KEY"))
     send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
     return None
 
@@ -260,7 +261,9 @@ def get_post_event_list(events: list) -> list:
             "date": datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group()),
             "title": event["summary"],
         }
-        if post_event["date"] > upper_limit_date:
+        if post_event["date"] - datetime.date.today() <= datetime.timedelta(days=0):
+            continue
+        elif post_event["date"] > upper_limit_date:
             break
         post_events.append(post_event)
     return post_events
