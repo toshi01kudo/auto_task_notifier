@@ -19,7 +19,9 @@ def fix_docstring() -> None:
         logging.info(f"File not found: {target_file}")
         return
     target_sentence_ptrn = r"start_date:.*, prior_days"
-    replace_sentence = "start_date: datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9), 'JST')), prior_days"
+    replace_sentence = \
+        "start_date: datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9), 'JST')), "\
+        + "prior_days"
     change_string(target_sentence_ptrn, replace_sentence, target_file)
 
 
