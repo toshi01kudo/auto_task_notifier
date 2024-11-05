@@ -12,7 +12,7 @@ Classes
     `delete(self, event)`
     :
 
-    `get(self, start_date: <module 'datetime' from '/opt/hostedtoolcache/Python/3.11.10/x64/lib/python3.11/datetime.py'> = datetime.datetime(2024, 11, 5, 10, 14, 9, 651255, tzinfo=datetime.timezone(datetime.timedelta(seconds=32400), 'JST')), prior_days: int = 30) ‑> list`
+    `get(self, start_date: <module 'datetime' from '/opt/hostedtoolcache/Python/3.11.10/x64/lib/python3.11/datetime.py'> = datetime.datetime(2024, 11, 5, 10, 14, 36, 583418, tzinfo=datetime.timezone(datetime.timedelta(seconds=32400), 'JST')), prior_days: int = 30) ‑> list`
     :   Google カレンダーの予定を取得するメソッド
         Args:
             start_date (datetime): 予定取得開始日。初期値は現在。
