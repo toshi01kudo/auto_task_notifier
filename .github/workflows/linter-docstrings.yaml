@@ -30,6 +30,7 @@ jobs:
           pip install -r requirements.txt
           rm -rf docs/docstring
           pdoc --force -o docs/docstring *.py
+          python module/fix_docstring.py
       - name: Commit files
         continue-on-error: true
         run: |
