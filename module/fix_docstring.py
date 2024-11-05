@@ -14,14 +14,15 @@ def fix_docstring() -> None:
     docstring出力後に修正する前提の関数とする
     """
     # class_gcalendar.md の修正
-    target_file = Path('docs/docstring/class_gcalendar.md')
+    target_file = Path("docs/docstring/class_gcalendar.md")
     if not target_file.is_file():
         logging.info(f"File not found: {target_file}")
         return
     target_sentence_ptrn = r"start_date:.*, prior_days"
-    replace_sentence = \
-        "start_date: datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9), 'JST')), "\
+    replace_sentence = (
+        "start_date: datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9), 'JST')), "
         + "prior_days"
+    )
     change_string(target_sentence_ptrn, replace_sentence, target_file)
 
 
@@ -38,6 +39,7 @@ def change_string(pattern: str, replace_str: str, file_path: Path) -> None:
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(new_docfile)
         logging.info(f"File is replaced: {file_path}")
+
 
 # Main ---
 
