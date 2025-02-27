@@ -10,7 +10,7 @@ import re
 import locale
 from class_gcalendar import CalendarApi, EventNotFoundException
 from make_choseisan import make_choseisan
-from common_tools import detect_event_type, send_line_notify
+from common_tools import detect_event_type, send_line_masageapi
 
 
 # Parameters ------------------
@@ -51,14 +51,14 @@ def auto_task_notifier_main() -> None:
         events = get_events_googlecal(gcal)
     except Exception as e:
         logging.error(f"### Error: {e} ###")
-        send_error_to_line(os.getenv("LINE_MGMT_TOKEN_KEY"))
+        send_error_to_line(os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
 
     # 何の対応が必要か判定
     try:
         goto_each_task(gcal, events)
     except Exception as e:
         logging.error(f"### Error: {e} ###")
-        send_error_to_line(os.getenv("LINE_MGMT_TOKEN_KEY"))
+        send_error_to_line(os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
 
     logging.info("#=== Program Finished ===#")
 
@@ -126,7 +126,7 @@ def one_week_pre_mgmt(event: dict) -> None:
     if "TRPG" in event["summary"]:
         line_text += "各卓のマスターに準備状況を確認してください。\n"
     # LINE 通知
-    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
     return None
 
 
@@ -150,7 +150,7 @@ def pre_event_mgmt(event: dict) -> None:
     if "TRPG" in event["summary"]:
         line_text += "次々回の卓内容も考えて宣伝できるようにしておきましょう。\n"
     # LINE 通知
-    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
     return None
 
 
@@ -175,7 +175,7 @@ def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
     line_text += os.getenv("LUXY_BDG_ACC_BOOK") + "\n"
     line_text += "今回の参加者はこちらです。\n"
     line_text += detect_remove_a_tag(event["description"]) + "\n"
-    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
 
     # 次回の案内
     next_event = get_next_event(event, events)
@@ -193,7 +193,7 @@ def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
         line_text += choseisan_url
 
     # LINE 通知
-    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
 
     # 今後の予定の案内
     post_event_list = get_post_event_list(events)
@@ -203,7 +203,7 @@ def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
 
     # LINE 通知
     # send_line_notify(line_text, os.getenv("LINE_USER_TOKEN_KEY"))
-    send_line_notify(line_text, os.getenv("LINE_MGMT_TOKEN_KEY"))
+    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
     return None
 
 
@@ -269,9 +269,9 @@ def get_post_event_list(events: list) -> list:
     return post_events
 
 
-def send_error_to_line(line_notify_token: str) -> None:
+def send_error_to_line(line_group_id: str) -> None:
     message = "何らかのエラーが発生したようです。ログを確認してください。"
-    send_line_notify(message, line_notify_token)
+    send_line_masageapi(message, line_group_id)
 
 
 # Main ---
