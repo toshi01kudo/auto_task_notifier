@@ -28,22 +28,22 @@ def send_line_masageapi(notification_message: str, line_group_id: str) -> None:
         notification_message (str): 送信メッセージ
         line_notify_token (str): 送信宛先LINEトークン。DEMOモードの場合、強制上書き。
     """
-    line_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+    line_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
     if os.getenv("DEMO_MODE") == "1":
         # DEMOモードの場合は強制的にデモ用の宛先へ変更
         line_group_id = os.getenv("LINE_MESSAGE_API_GROUP_ID_DEMO")
     # line_group_id = os.getenv('LINE_MESSAGE_API_GROUP_ID')
-    line_api_url = 'https://api.line.me/v2/bot/message/push'
+    line_api_url = "https://api.line.me/v2/bot/message/push"
     headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {line_token}',
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {line_token}",
     }
     data = {
-        'to': line_group_id,
-        'messages': [
+        "to": line_group_id,
+        "messages": [
             {
-                'type': 'text',
-                'text': notification_message,
+                "type": "text",
+                "text": notification_message,
             },
         ],
     }
