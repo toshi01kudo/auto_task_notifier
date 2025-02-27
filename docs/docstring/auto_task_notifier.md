@@ -86,5 +86,5 @@ Functions
     Returns:
         None
 
-`send_error_to_line(line_notify_token: str) ‑> None`
+`send_error_to_line(line_group_id: str) ‑> None`
 :

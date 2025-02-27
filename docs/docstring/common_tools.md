@@ -11,7 +11,7 @@ Functions
     Returns:
         event_type (EventIdStrEnum): イベント種別
 
-`send_line_notify(notification_message: str, line_notify_token: str) ‑> None`
+`send_line_masageapi(notification_message: str, line_group_id: str) ‑> None`
 :   LINEに通知する
     Args:
         notification_message (str): 送信メッセージ
