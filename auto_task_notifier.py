@@ -9,9 +9,9 @@ import os
 import re
 import locale
 from class_gcalendar import CalendarApi, EventNotFoundException
+from class_str_enum import EventIdStrEnum
 from make_choseisan import make_choseisan
 from common_tools import detect_event_type, send_line_masageapi
-
 
 # Parameters ------------------
 JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
@@ -29,206 +29,154 @@ except locale.Error as e:
     locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
 
 
-# Main ---
-def auto_task_notifier_main() -> None:
-    """
-    スケジュールから自動的にタスクを通知するプログラム
-    Args:
-        None
-    Returns:
-        None
-    """
-    # Logging
-    logging.basicConfig(level=logging.INFO, format=" %(asctime)s - %(levelname)s - %(message)s")
-    logging.info("#=== Start program ===#")
+# Classes ------------------
 
-    # load parameters
-    load_dotenv()
 
-    # スケジュールを取得
-    try:
-        gcal = CalendarApi()
-        events = get_events_googlecal(gcal)
-    except Exception as e:
-        logging.error(f"### Error: {e} ###")
-        send_error_to_line(os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
+class Event:
+    """Google Calendar イベントのラッパー"""
 
-    # 何の対応が必要か判定
-    try:
-        goto_each_task(gcal, events)
-    except Exception as e:
-        logging.error(f"### Error: {e} ###")
-        send_error_to_line(os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
+    def __init__(self, raw: dict) -> None:
+        self.raw = raw
 
-    logging.info("#=== Program Finished ===#")
+    @property
+    def summary(self) -> str:
+        return self.raw["summary"]
+
+    @property
+    def date(self) -> datetime.date:
+        start = self.raw.get("start", {})
+        start_value = start.get("dateTime") or start.get("date")
+        if start_value is None:
+            raise ValueError("Event start is missing both 'dateTime' and 'date'")
+        match = re.search(r"^\d{4}-\d{2}-\d{2}", start_value)
+        if match is None:
+            raise ValueError(f"Event start value is not a valid ISO date: {start_value!r}")
+        return datetime.date.fromisoformat(match.group())
+
+    @property
+    def event_type(self) -> EventIdStrEnum:
+        return detect_event_type(self.raw)
+
+    @property
+    def description(self) -> str | None:
+        return self.raw.get("description")
+
+    @description.setter
+    def description(self, value: str | None) -> None:
+        self.raw["description"] = value
+
+    @property
+    def clean_description(self) -> str:
+        """HTMLのaタグを除去した説明文を返す"""
+        if self.description is None:
+            return ""
+        return detect_remove_a_tag(self.description)
+
+    def is_trpg(self) -> bool:
+        return "TRPG" in self.summary
+
+    def days_from_today(self) -> int:
+        """今日からの日数差を返す（未来なら正、過去なら負）"""
+        return (self.date - datetime.date.today()).days
+
+
+class EventNotifier:
+    """イベントに応じたLINE通知を管理する"""
+
+    def __init__(self, gcal: CalendarApi, group_id: str) -> None:
+        self.gcal = gcal
+        self.group_id = group_id
+
+    def notify(self, message: str) -> None:
+        send_line_masageapi(message, self.group_id)
+
+    def process_events(self, events: list[Event]) -> None:
+        """全イベントを走査し、該当するタスクを実行する"""
+        for event in events:
+            days = event.days_from_today()
+            if days == 1:
+                self.on_pre_event(event)
+            elif days == -1:
+                self.on_post_event(event, events)
+            elif days == 7:
+                self.on_one_week_before(event)
+
+    def on_one_week_before(self, event: Event) -> None:
+        """イベント1週間前のリマインド"""
+        text = f"{event.summary} の1週間前です。\n"
+        text += "現在の応募状況を確認して募集を行ってください。\n"
+        text += event.clean_description + "\n"
+        if event.is_trpg():
+            text += "各卓のマスターに準備状況を確認してください。\n"
+        self.notify(text)
+
+    def on_pre_event(self, event: Event) -> None:
+        """イベント前日のタスク"""
+        text = f"明日は {event.summary} です。\n"
+        text += "集合時間は12:30です。\n"
+        text += "今回の調整さんURLはこちら\n"
+        text += event.clean_description + "\n"
+        if event.is_trpg():
+            text += "次々回の卓内容も考えて宣伝できるようにしておきましょう。\n"
+        self.notify(text)
+
+    def on_post_event(self, event: Event, all_events: list[Event]) -> None:
+        """イベント翌日のタスク"""
+        # 今回の精算
+        text = f"{event.summary} お疲れ様でした。どうでしたか？^^\n"
+        text += "参加者を確認し、帳簿を更新してください。備品やお菓子代などの金額も入れてください。\n"
+        text += (os.getenv("LUXY_BDG_ACC_BOOK") or "") + "\n"
+        text += "今回の参加者はこちらです。\n"
+        text += event.clean_description + "\n"
+        self.notify(text)
+
+        # 次回の案内
+        self._notify_next_event(event, all_events)
+
+        # 今後の予定一覧
+        self._notify_upcoming_events(all_events)
+
+    def _notify_next_event(self, current: Event, all_events: list[Event]) -> None:
+        """次回の同一タイプイベントを案内する"""
+        next_ev = self._find_next_same_type(current, all_events)
+        if next_ev is None:
+            logging.warning(f"次回の {current.event_type} イベントが見つかりませんでした。")
+            return
+        text = f"次回は {next_ev.date} 予定です。会議室の予約をお願いします。\n"
+        text += "調整さんの周知をお願いします。\n"
+        if next_ev.description is not None:
+            text += next_ev.clean_description
+        else:
+            choseisan_url = make_choseisan(next_ev.raw)
+            next_ev.description = choseisan_url
+            self.gcal.update(next_ev.raw)
+            text += choseisan_url
+        self.notify(text)
+
+    def _notify_upcoming_events(self, all_events: list[Event]) -> None:
+        """今後の予定一覧を通知する"""
+        upper_limit = (datetime.date.today() + datetime.timedelta(days=93)).replace(day=1)
+        text = "今後の予定一覧です。\n"
+        for ev in all_events:
+            if ev.days_from_today() <= 0:
+                continue
+            if ev.date > upper_limit:
+                break
+            text += f"{ev.date}({ev.date.strftime('%a')}): {ev.summary}\n"
+        self.notify(text)
+
+    @staticmethod
+    def _find_next_same_type(current: Event, all_events: list[Event]) -> Event | None:
+        """次回の同一タイプイベントを探す"""
+        for ev in all_events:
+            if ev.date <= current.date:
+                continue
+            if ev.event_type == current.event_type:
+                return ev
+        return None
 
 
 # Functions ------------------
-def get_events_googlecal(gcal: CalendarApi) -> list:
-    """
-    Google カレンダーからスケジュールを取得する関数
-    Args:
-        gcal (CalendarApi): Google calendar class
-    Returns:
-        events (list): 2ヶ月以内の予定されたスケジュールのリスト
-    """
-    # Google Calendar クラスの呼び出し
-    last_week = datetime.datetime.now(JST) + datetime.timedelta(days=-7)
-    try:
-        events = gcal.get(start_date=last_week, prior_days=90)  # 先週から60日後までのスケジュールを取得
-    except EventNotFoundException as e:
-        logging.error(f"{e}")
-        return []
-
-    return events
-
-
-def goto_each_task(gcal: CalendarApi, events: list) -> None:
-    """
-    具体的なタスクに分岐
-    Args:
-        gcal (CalendarApi): Google calendar class
-        events (list): スケジュールされた予定。タイトルと日付。
-    Returns:
-        None
-    """
-    today = datetime.date.today()
-    for event in events:
-        event_date = datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group())
-        if event_date - today == datetime.timedelta(days=1):
-            # イベント前日
-            pre_event_mgmt(event)
-        elif today - event_date == datetime.timedelta(days=1):
-            # イベント翌日
-            post_event_mgmt(event, events, gcal)
-        elif event_date - today == datetime.timedelta(days=7):
-            # イベント1週間前
-            one_week_pre_mgmt(event)
-        else:
-            pass
-
-
-def one_week_pre_mgmt(event: dict) -> None:
-    """
-    イベントの1週間前のリマインド
-    * {イベント内容}の1週間前です、と通知
-    * 調整さんのURLを送り、参加者の確認を促す
-    * （TRPG会なら）各卓のマスターに準備状況をフォローするよう依頼
-    * Lineに通知する
-    Args:
-        event (dict): Google カレンダーのイベント情報
-    Returns:
-        None
-    """
-    line_text = f"{event['summary']} の1週間前です。\n"
-    line_text += "現在の応募状況を確認して募集を行ってください。\n"
-    line_text += detect_remove_a_tag(event["description"]) + "\n"
-    if "TRPG" in event["summary"]:
-        line_text += "各卓のマスターに準備状況を確認してください。\n"
-    # LINE 通知
-    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
-    return None
-
-
-def pre_event_mgmt(event: dict) -> None:
-    """
-    イベントの前日に行うタスク
-    * 明日は{イベント内容}です、と通知
-    * 集合時間が12:30で間違いないか確認を促す
-    * 調整さんのURLを送り、参加者の確認を促す
-    * （TRPG会なら）次々回のTRPGの卓内容を考えるようにリマインド
-    * Lineに通知する
-    Args:
-        event (dict): Google カレンダーのイベント情報
-    Returns:
-        None
-    """
-    line_text = f"明日は {event['summary']} です。\n"
-    line_text += "集合時間は12:30です。\n"
-    line_text += "今回の調整さんURLはこちら\n"
-    line_text += detect_remove_a_tag(event["description"]) + "\n"
-    if "TRPG" in event["summary"]:
-        line_text += "次々回の卓内容も考えて宣伝できるようにしておきましょう。\n"
-    # LINE 通知
-    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
-    return None
-
-
-def post_event_mgmt(event: dict, events: list, gcal: CalendarApi) -> None:
-    """
-    ボドゲ会の翌日に行うタスク
-    * {イベント内容}お疲れ様でした、と通知
-    * 調整さんのURLと収益計算のURLを送り、帳簿を付けるように催促
-    * 次回の{イベント内容}の会議室予約を依頼
-    * 次回イベント日を自動通知し、調整さんのURLを送る
-    * Lineに通知する
-    Args:
-        event (dict): スケジュールされた予定。タイトルと日付。
-        events (list): Googleカレンダーから取得した直近の予定一覧
-        gcal (CalendarApi): ボドゲ部のGoogleカレンダー操作クラス
-    Returns:
-        None
-    """
-    # 今回の精算
-    line_text = f"{event['summary']} お疲れ様でした。どうでしたか？^^\n"
-    line_text += "参加者を確認し、帳簿を更新してください。備品やお菓子代などの金額も入れてください。\n"
-    line_text += os.getenv("LUXY_BDG_ACC_BOOK") + "\n"
-    line_text += "今回の参加者はこちらです。\n"
-    line_text += detect_remove_a_tag(event["description"]) + "\n"
-    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
-
-    # 次回の案内
-    next_event = get_next_event(event, events)
-    next_event_date = datetime.date.fromisoformat(
-        re.search(r"^\d{4}-\d{2}-\d{2}", next_event["start"]["dateTime"]).group()
-    )
-    line_text = f"次回は {next_event_date} 予定です。会議室の予約をお願いします。\n"
-    line_text += "調整さんの周知をお願いします。\n"
-    if "description" in next_event:
-        line_text += detect_remove_a_tag(next_event["description"])
-    else:
-        choseisan_url = make_choseisan(next_event)
-        next_event["description"] = choseisan_url
-        gcal.update(next_event)
-        line_text += choseisan_url
-
-    # LINE 通知
-    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
-
-    # 今後の予定の案内
-    post_event_list = get_post_event_list(events)
-    line_text = "今後の予定一覧です。\n"
-    for event in post_event_list:
-        line_text += f"{event['date']}({event['date'].strftime('%a')}): {event['title']}\n"
-
-    # LINE 通知
-    # send_line_notify(line_text, os.getenv("LINE_USER_TOKEN_KEY"))
-    send_line_masageapi(line_text, os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT"))
-    return None
-
-
-def get_next_event(last_event: dict, events: list) -> None:
-    """
-    次回の同一イベントを取得するメソッド
-    Args:
-        event (dict): スケジュールされた予定。タイトルと日付。
-        events (list): Googleカレンダーから取得した直近の予定一覧
-    Returns:
-        event (dict): 次回のイベント
-    """
-    # Fix the event type
-    last_event_type = detect_event_type(last_event)
-    last_event_date = datetime.date.fromisoformat(
-        re.search(r"^\d{4}-\d{2}-\d{2}", last_event["start"]["dateTime"]).group()
-    )
-    for event in events:
-        event_date = datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group())
-        event_type = detect_event_type(event)
-        if event_date - last_event_date <= datetime.timedelta(days=0):
-            continue
-        elif last_event_type == event_type:
-            return event
-    return {}
 
 
 def detect_remove_a_tag(description: str) -> str:
@@ -246,35 +194,54 @@ def detect_remove_a_tag(description: str) -> str:
         return description
 
 
-def get_post_event_list(events: list) -> list:
-    """
-    数か月先のイベント一覧を取得するメソッド
-    Args:
-        events (list): Googleカレンダーから取得した直近の予定一覧
-    Returns:
-        post_events (list): 予定の日付一覧
-    """
-    upper_limit_date = (datetime.date.today() + datetime.timedelta(days=93)).replace(day=1)
-    post_events = []
-    for event in events:
-        post_event = {
-            "date": datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group()),
-            "title": event["summary"],
-        }
-        if post_event["date"] - datetime.date.today() <= datetime.timedelta(days=0):
-            continue
-        elif post_event["date"] > upper_limit_date:
-            break
-        post_events.append(post_event)
-    return post_events
-
-
 def send_error_to_line(line_group_id: str) -> None:
     message = "何らかのエラーが発生したようです。ログを確認してください。"
     send_line_masageapi(message, line_group_id)
 
 
 # Main ---
+
+
+def auto_task_notifier_main() -> None:
+    """
+    スケジュールから自動的にタスクを通知するプログラム
+    """
+    # Logging
+    logging.basicConfig(level=logging.INFO, format=" %(asctime)s - %(levelname)s - %(message)s")
+    logging.info("#=== Start program ===#")
+
+    # load parameters
+    load_dotenv()
+
+    group_id = os.getenv("LINE_MESSAGE_API_GROUP_ID_MGMT")
+    if not group_id:
+        logging.error("LINE_MESSAGE_API_GROUP_ID_MGMT is not set.")
+        return
+
+    # スケジュールを取得
+    try:
+        gcal = CalendarApi()
+        last_week = datetime.datetime.now(JST) + datetime.timedelta(days=-7)
+        raw_events = gcal.get(start_date=last_week, prior_days=90)
+        events = [Event(e) for e in raw_events]
+    except EventNotFoundException as e:
+        logging.error(f"{e}")
+        events = []
+    except Exception as e:
+        logging.error(f"### Error: {e} ###")
+        send_error_to_line(group_id)
+        logging.info("#=== Program Finished ===#")
+        return
+
+    # 何の対応が必要か判定
+    try:
+        notifier = EventNotifier(gcal, group_id)
+        notifier.process_events(events)
+    except Exception as e:
+        logging.error(f"### Error: {e} ###")
+        send_error_to_line(group_id)
+
+    logging.info("#=== Program Finished ===#")
 
 
 if __name__ == "__main__":
