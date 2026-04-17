@@ -8,6 +8,12 @@ Functions
 `auto_task_notifier_main() ‑> None`
 :   スケジュールから自動的にタスクを通知するプログラム
 
+`create_choseisan_by_date_main(target_date_str: str) ‑> None`
+:   指定日のイベントに対して調整さんを作成し、Google カレンダーに URL を登録する
+
+`create_choseisan_for_event(gcal: class_gcalendar.CalendarApi, event: auto_task_notifier.Event) ‑> str`
+:   指定イベントの調整さんを作成し、Google カレンダーに URL を登録する
+
 `detect_remove_a_tag(description: str) ‑> str`
 :   detect & remove HTML a tag.
     Args:

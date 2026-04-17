@@ -66,7 +66,13 @@ def make_choseisan(event: dict) -> str:
     Returns:
         choseisan_url (str): 作成された調整さんのURL
     """
-    event_date = datetime.date.fromisoformat(re.search(r"^\d{4}-\d{2}-\d{2}", event["start"]["dateTime"]).group())
+    start_value = event["start"].get("dateTime") or event["start"].get("date")
+    if start_value is None:
+        raise ValueError("Event start is missing both 'dateTime' and 'date'")
+    match = re.search(r"^\d{4}-\d{2}-\d{2}", start_value)
+    if match is None:
+        raise ValueError(f"Event start value is not a valid ISO date: {start_value!r}")
+    event_date = datetime.date.fromisoformat(match.group())
     event_date_str = event_date.strftime("%Y/%m/%d")
     choseisan_title = f"{event['summary']} - {event_date_str}"
     event_type = detect_event_type(event)
