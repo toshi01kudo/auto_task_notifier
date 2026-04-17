@@ -1,6 +1,5 @@
 from enum import StrEnum
 
-
 # String ENUM 型
 
 
