@@ -2,6 +2,7 @@
 This is main function to manage this repogitory.
 """
 
+import argparse
 import logging
 from dotenv import load_dotenv
 import datetime
@@ -147,9 +148,7 @@ class EventNotifier:
         if next_ev.description is not None:
             text += next_ev.clean_description
         else:
-            choseisan_url = make_choseisan(next_ev.raw)
-            next_ev.description = choseisan_url
-            self.gcal.update(next_ev.raw)
+            choseisan_url = create_choseisan_for_event(self.gcal, next_ev)
             text += choseisan_url
         self.notify(text)
 
@@ -177,6 +176,15 @@ class EventNotifier:
 
 
 # Functions ------------------
+
+
+def create_choseisan_for_event(gcal: CalendarApi, event: Event) -> str:
+    """指定イベントの調整さんを作成し、Google カレンダーに URL を登録する"""
+    choseisan_url = make_choseisan(event.raw)
+    event.description = choseisan_url
+    gcal.update(event.raw)
+    logging.info(f"調整さんを作成しました: {event.summary} ({event.date}) -> {choseisan_url}")
+    return choseisan_url
 
 
 def detect_remove_a_tag(description: str) -> str:
@@ -244,5 +252,65 @@ def auto_task_notifier_main() -> None:
     logging.info("#=== Program Finished ===#")
 
 
+def create_choseisan_by_date_main(target_date_str: str) -> None:
+    """指定日のイベントに対して調整さんを作成し、Google カレンダーに URL を登録する"""
+    logging.basicConfig(level=logging.INFO, format=" %(asctime)s - %(levelname)s - %(message)s")
+    logging.info("#=== Start create_choseisan_by_date ===#")
+
+    load_dotenv()
+
+    try:
+        target_date = datetime.date.fromisoformat(target_date_str)
+    except ValueError:
+        logging.error(f"日付の形式が不正です: {target_date_str} (YYYY-MM-DD で指定してください)")
+        return
+
+    try:
+        gcal = CalendarApi()
+        target_datetime = datetime.datetime(target_date.year, target_date.month, target_date.day, tzinfo=JST)
+        raw_events = gcal.get(start_date=target_datetime, prior_days=0)
+        events = [Event(e) for e in raw_events]
+    except EventNotFoundException:
+        logging.error(f"{target_date} にイベントが見つかりませんでした。")
+        return
+    except Exception as e:
+        logging.error(f"### Error: {e} ###")
+        return
+
+    # 指定日のイベントを検索
+    matched = []
+    for ev in events:
+        try:
+            if ev.date == target_date:
+                matched.append(ev)
+        except ValueError as e:
+            logging.warning(f"イベントの日付取得をスキップしました: {e}")
+    if not matched:
+        logging.error(f"{target_date} にイベントが見つかりませんでした。")
+        return
+
+    for event in matched:
+        if event.description is not None:
+            logging.info(f"スキップ: {event.summary} ({event.date}) は既に説明が登録されています。")
+            continue
+        try:
+            create_choseisan_for_event(gcal, event)
+        except Exception as e:
+            logging.error(f"調整さんの作成に失敗しました: {event.summary} ({event.date}) - {e}")
+
+    logging.info("#=== Program Finished ===#")
+
+
 if __name__ == "__main__":
-    auto_task_notifier_main()
+    parser = argparse.ArgumentParser(description="Auto Task Notifier")
+    parser.add_argument(
+        "--create-choseisan",
+        metavar="YYYY-MM-DD",
+        help="指定日のイベントに対して調整さんを作成する",
+    )
+    args = parser.parse_args()
+
+    if args.create_choseisan:
+        create_choseisan_by_date_main(args.create_choseisan)
+    else:
+        auto_task_notifier_main()
