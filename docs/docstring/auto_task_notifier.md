@@ -16,7 +16,7 @@ Functions
         str: a pure strings.
 
 `send_error_to_line(line_group_id: str) ‑> None`
-:   エラー発生時にLINEグループへ通知する
+:   
 
 Classes
 -------
