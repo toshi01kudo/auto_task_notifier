@@ -267,9 +267,7 @@ def create_choseisan_by_date_main(target_date_str: str) -> None:
             normalized = f"{normalized[:4]}-{normalized[4:6]}-{normalized[6:]}"
         target_date = datetime.date.fromisoformat(normalized)
     except ValueError:
-        logging.error(
-            f"日付の形式が不正です: {target_date_str} ({DATE_FORMATS_HINT} で指定してください)"
-        )
+        logging.error(f"日付の形式が不正です: {target_date_str} ({DATE_FORMATS_HINT} で指定してください)")
         return
 
     try:
