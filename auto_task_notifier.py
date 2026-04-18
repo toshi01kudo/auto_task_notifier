@@ -16,6 +16,7 @@ from common_tools import detect_event_type, send_line_masageapi
 
 # Parameters ------------------
 JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
+DATE_FORMATS_HINT = "YYYY-MM-DD, YYYYMMDD, YYYY/MM/DD, YYYY.MM.DD"
 # localeモジュールで曜日を日本語表示にする
 try:
     if os.name == "nt":  # Windows
@@ -260,9 +261,15 @@ def create_choseisan_by_date_main(target_date_str: str) -> None:
     load_dotenv()
 
     try:
-        target_date = datetime.date.fromisoformat(target_date_str)
+        stripped = target_date_str.strip()
+        normalized = re.sub(r"[/.]", "-", stripped)
+        if re.fullmatch(r"\d{8}", normalized):
+            normalized = f"{normalized[:4]}-{normalized[4:6]}-{normalized[6:]}"
+        target_date = datetime.date.fromisoformat(normalized)
     except ValueError:
-        logging.error(f"日付の形式が不正です: {target_date_str} (YYYY-MM-DD で指定してください)")
+        logging.error(
+            f"日付の形式が不正です: {target_date_str} ({DATE_FORMATS_HINT} で指定してください)"
+        )
         return
 
     try:
@@ -305,8 +312,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Auto Task Notifier")
     parser.add_argument(
         "--create-choseisan",
-        metavar="YYYY-MM-DD",
-        help="指定日のイベントに対して調整さんを作成する",
+        metavar="DATE",
+        help=f"指定日のイベントに対して調整さんを作成する ({DATE_FORMATS_HINT})",
     )
     args = parser.parse_args()
 

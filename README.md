@@ -56,8 +56,15 @@ Google カレンダーの予定を走査し、イベントの1週間前・前日
 ### 指定日の調整さん作成
 
 ```sh
-python auto_task_notifier.py --create-choseisan YYYY-MM-DD
+python auto_task_notifier.py --create-choseisan DATE
 ```
+
+日付は以下の形式に対応しています。
+
+- `YYYY-MM-DD` (例: `2026-04-19`)
+- `YYYYMMDD` (例: `20260419`)
+- `YYYY/MM/DD` (例: `2026/04/19`)
+- `YYYY.MM.DD` (例: `2026.04.19`)
 
 指定日に登録されている Google カレンダーのイベントに対して調整さんを作成し、URL をカレンダーの説明欄に登録します。LINE 通知は行いません。既に説明が登録されているイベントはスキップされます。
 
