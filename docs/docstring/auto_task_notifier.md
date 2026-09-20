@@ -5,8 +5,13 @@ This is main function to manage this repogitory.
 Functions
 ---------
 
-`auto_task_notifier_main() ‑> None`
+`auto_task_notifier_main(today: datetime.date | None = None) ‑> None`
 :   スケジュールから自動的にタスクを通知するプログラム
+    Args:
+        today (datetime.date | None): 毎月1日の全体向け予定周知の判定に使う日付。None なら実行日。
+
+`build_schedule_announcement(events: list[auto_task_notifier.Event], today: datetime.date, calendar_url: str | None) ‑> str`
+:   全体向けの今後の予定一覧メッセージを組み立てる
 
 `create_choseisan_by_date_main(target_date_str: str) ‑> None`
 :   指定日のイベントに対して調整さんを作成し、Google カレンダーに URL を登録する
@@ -20,6 +25,15 @@ Functions
         description (str): the target strings.
     Return:
         str: a pure strings.
+
+`fetch_events_for_announcement(gcal: class_gcalendar.CalendarApi, today: datetime.date) ‑> list[auto_task_notifier.Event]`
+:   全体向けの予定一覧に載せる範囲（today から翌々月末まで）を含む予定を取得する
+
+`notify_schedule_main(today: datetime.date | None = None) ‑> None`
+:   全体向け LINE グループへ今後の予定一覧を手動で送信する
+
+`notify_schedule_to_users(events: list[auto_task_notifier.Event], today: datetime.date) ‑> None`
+:   全体向け LINE グループへ今後の予定一覧を送信する
 
 `send_error_to_line(line_group_id: str) ‑> None`
 :   
