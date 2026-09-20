@@ -3,4 +3,5 @@ geckodriver.log
 __pycache__/*
 */__pycache__/*
 .env
+.venv/
 my-project-*.json

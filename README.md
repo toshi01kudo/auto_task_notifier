@@ -10,6 +10,7 @@ Google カレンダーから予定を取得し、調整さんを作成して、L
 - 生成したイベント情報を LINE Messaging API で通知
 - テンプレートによる通知コメントのカスタマイズ
 - 指定日のイベントに対する調整さんの手動作成
+- 全体向けグループへの今後の予定一覧（翌々月末まで）の月次送信
 
 ## セットアップ
 
@@ -52,6 +53,30 @@ python auto_task_notifier.py
 ```
 
 Google カレンダーの予定を走査し、イベントの1週間前・前日・翌日に応じた LINE 通知を自動で送信します。
+また、毎月1日の実行時には、全体向けグループ (`LINE_MESSAGE_API_GROUP_ID_USER`) へ今後の予定一覧を送信します。
+
+### 全体向けの予定一覧の送信
+
+```sh
+python auto_task_notifier.py --notify-schedule
+```
+
+実行日から翌々月末までの予定を一覧にして、全体向けグループへ送信します（毎月1日の自動送信と同じ内容を手動で送るためのオプションです）。
+カレンダーの説明欄に調整さんの URL が登録されている予定は URL を併記し、未登録の予定は日付のみを載せます。
+`CALENDAR_PUBLIC_URL` を設定すると、末尾に公開カレンダーの案内を付けます。対象の予定が無い場合は送信しません。
+
+```
+・10/24 (土) T4 ボドゲ会
+https://chouseisan.com/s?h=xxxxxxxx
+・11/15 (日) T4 ボドゲ会
+--
+開催予定のカレンダーはこちら（3ヶ月以降は予告なく変更になる可能性があります）
+https://calendar.google.com/calendar/...
+```
+
+事前に `DEMO_MODE=1` で実行すると、デモ用グループで表示を確認できます。
+
+> LINE Messaging API はオープンチャットに対応していないため、送信先は Bot が参加している通常の LINE グループである必要があります。
 
 ### 指定日の調整さん作成
 
@@ -76,6 +101,7 @@ python auto_task_notifier.py --create-choseisan DATE
 - `common_tools.py` ... 共通ユーティリティ
 - `template_choseisan_bdg_comment.txt` など ... 通知用テンプレート
 - `requirements.txt` ... 必要なPythonパッケージ
+- `tests/` ... ユニットテスト (`python -m unittest discover -s tests` で実行)
 - `.env.example` ... 環境変数サンプル
 
 ## Google/LINE連携の設定

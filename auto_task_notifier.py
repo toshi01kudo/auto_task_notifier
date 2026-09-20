@@ -17,6 +17,7 @@ from common_tools import detect_event_type, send_line_masageapi
 # Parameters ------------------
 JST = datetime.timezone(datetime.timedelta(hours=+9), "JST")
 DATE_FORMATS_HINT = "YYYY-MM-DD, YYYYMMDD, YYYY/MM/DD, YYYY.MM.DD"
+WEEKDAYS_JA = "月火水木金土日"  # date.weekday() の 0(月)〜6(日) に対応
 # localeモジュールで曜日を日本語表示にする
 try:
     if os.name == "nt":  # Windows
@@ -188,6 +189,54 @@ def create_choseisan_for_event(gcal: CalendarApi, event: Event) -> str:
     return choseisan_url
 
 
+def build_schedule_announcement(events: list[Event], today: datetime.date, calendar_url: str | None) -> str:
+    """全体向けの今後の予定一覧メッセージを組み立てる"""
+    # 3か月後の1日（＝翌々月末の翌日）を上限とする
+    month_index = today.year * 12 + (today.month - 1) + 3
+    upper_limit = datetime.date(month_index // 12, month_index % 12 + 1, 1)
+    text = ""
+    for ev in events:
+        if ev.date < today or ev.date >= upper_limit:
+            continue
+        text += f"・{ev.date.month}/{ev.date.day} ({WEEKDAYS_JA[ev.date.weekday()]}) {ev.summary}\n"
+        url_match = re.search(r"https?://chouseisan\.com/s\?h=\w+", ev.description or "")
+        if url_match:
+            text += url_match.group() + "\n"
+    if text and calendar_url:
+        text += "--\n"
+        text += "開催予定のカレンダーはこちら（3ヶ月以降は予告なく変更になる可能性があります）\n"
+        text += calendar_url + "\n"
+    return text
+
+
+def fetch_events_for_announcement(gcal: CalendarApi, today: datetime.date) -> list[Event]:
+    """全体向けの予定一覧に載せる範囲（today から翌々月末まで）を含む予定を取得する"""
+    start = datetime.datetime(today.year, today.month, today.day, tzinfo=JST)
+    try:
+        # 連続する3か月は最長92日なので、92日後まで取得すれば翌々月末を必ず含む
+        raw_events = gcal.get(start_date=start, prior_days=92)
+    except EventNotFoundException as e:
+        logging.info(f"{e}")
+        return []
+    return [Event(e) for e in raw_events]
+
+
+def notify_schedule_to_users(events: list[Event], today: datetime.date) -> None:
+    """全体向け LINE グループへ今後の予定一覧を送信する"""
+    # DEMOモードでは送信時に宛先がデモ用へ差し替わるため、全体向けグループの設定は不要
+    is_demo = os.getenv("DEMO_MODE") == "1"
+    group_id_key = "LINE_MESSAGE_API_GROUP_ID_DEMO" if is_demo else "LINE_MESSAGE_API_GROUP_ID_USER"
+    group_id = os.getenv(group_id_key)
+    if not group_id:
+        logging.error(f"{group_id_key} is not set.")
+        return
+    text = build_schedule_announcement(events, today, os.getenv("CALENDAR_PUBLIC_URL"))
+    if not text:
+        logging.info("周知対象の予定がないため、全体向けの予定一覧は送信しません。")
+        return
+    send_line_masageapi(text, group_id)
+
+
 def detect_remove_a_tag(description: str) -> str:
     """
     detect & remove HTML a tag.
@@ -211,9 +260,11 @@ def send_error_to_line(line_group_id: str) -> None:
 # Main ---
 
 
-def auto_task_notifier_main() -> None:
+def auto_task_notifier_main(today: datetime.date | None = None) -> None:
     """
     スケジュールから自動的にタスクを通知するプログラム
+    Args:
+        today (datetime.date | None): 毎月1日の全体向け予定周知の判定に使う日付。None なら実行日。
     """
     # Logging
     logging.basicConfig(level=logging.INFO, format=" %(asctime)s - %(levelname)s - %(message)s")
@@ -249,6 +300,38 @@ def auto_task_notifier_main() -> None:
     except Exception as e:
         logging.error(f"### Error: {e} ###")
         send_error_to_line(group_id)
+
+    # 毎月1日は全体向けに今後の予定一覧を周知
+    if today is None:
+        today = datetime.date.today()
+    if today.day == 1:
+        try:
+            notify_schedule_to_users(fetch_events_for_announcement(gcal, today), today)
+        except Exception as e:
+            logging.error(f"### Error: {e} ###")
+            send_error_to_line(group_id)
+
+    logging.info("#=== Program Finished ===#")
+
+
+def notify_schedule_main(today: datetime.date | None = None) -> None:
+    """全体向け LINE グループへ今後の予定一覧を手動で送信する"""
+    logging.basicConfig(level=logging.INFO, format=" %(asctime)s - %(levelname)s - %(message)s")
+    logging.info("#=== Start notify_schedule ===#")
+
+    load_dotenv()
+
+    if today is None:
+        today = datetime.date.today()
+
+    try:
+        gcal = CalendarApi()
+        events = fetch_events_for_announcement(gcal, today)
+    except Exception as e:
+        logging.error(f"### Error: {e} ###")
+        return
+
+    notify_schedule_to_users(events, today)
 
     logging.info("#=== Program Finished ===#")
 
@@ -313,9 +396,16 @@ if __name__ == "__main__":
         metavar="DATE",
         help=f"指定日のイベントに対して調整さんを作成する ({DATE_FORMATS_HINT})",
     )
+    parser.add_argument(
+        "--notify-schedule",
+        action="store_true",
+        help="全体向け LINE グループへ今後の予定一覧（翌々月末まで）を送信する",
+    )
     args = parser.parse_args()
 
     if args.create_choseisan:
         create_choseisan_by_date_main(args.create_choseisan)
+    elif args.notify_schedule:
+        notify_schedule_main()
     else:
         auto_task_notifier_main()
