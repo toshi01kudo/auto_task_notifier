@@ -2,6 +2,9 @@ name: lint-docstrings
 
 on: push
 
+permissions:
+  contents: write
+
 jobs:
   linter-docs-for-python:
     runs-on: ubuntu-latest
@@ -10,11 +13,9 @@ jobs:
         python-version: ["3.11"]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.CONFIG_GH_TOKEN }}
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -26,7 +27,6 @@ jobs:
           black .
       - name: Generate python documents by pdoc3
         run: |
-          sed -i s,ssh://git@github.com:toshi01kudo/selenium_helper.git,https://github.com/toshi01kudo/selenium_helper.git,g requirements.txt
           pip install -r requirements.txt
           rm -rf docs/docstring
           pdoc --force -o docs/docstring *.py
